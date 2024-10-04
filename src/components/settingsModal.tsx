@@ -5,16 +5,51 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useToast } from "@/hooks/use-toast"
 
 export default function SettingsModal() {
   const [gcpCredentials, setGcpCredentials] = useState('')
   const [gcpBucketName, setGcpBucketName] = useState('')
+  const [gladiaKey, setGladiaKey] = useState('')
   const [voiceRecording, setVoiceRecording] = useState<File | null>(null)
+  const { toast } = useToast()
 
   const handleVoiceRecordingUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
       setVoiceRecording(file)
+    }
+  }
+
+  const saveGCPCredentials = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/gcp-credentials', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          credentials: gcpCredentials,
+          bucket_name: gcpBucketName,
+          gladia_key: gladiaKey
+        })
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "GCP credentials and Gladia key saved successfully",
+        })
+      } else {
+        throw new Error('Failed to save GCP credentials and Gladia key');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save GCP credentials and Gladia key",
+        variant: "destructive",
+      })
     }
   }
 
@@ -43,7 +78,16 @@ export default function SettingsModal() {
             placeholder="Enter your GCP bucket name"
           />
         </div>
-        <Button className="w-full">Save Bucket Info</Button>
+        <div className="space-y-2">
+          <Label htmlFor="gladia-key">Gladia API Key</Label>
+          <Input
+            id="gladia-key"
+            value={gladiaKey}
+            onChange={(e) => setGladiaKey(e.target.value)}
+            placeholder="Enter your Gladia API key"
+          />
+        </div>
+        <Button className="w-full" onClick={saveGCPCredentials}>Save Bucket Info</Button>
       </TabsContent>
       <TabsContent value="voice-recording" className="space-y-4">
         <div className="space-y-2">

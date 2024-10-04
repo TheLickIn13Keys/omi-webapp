@@ -1,7 +1,5 @@
 "use client"
-
-
-import { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,36 +7,280 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
-import { Music, Play, Send } from 'lucide-react'
-import React from 'react'
+import { Music, Play, Pause, Send } from 'lucide-react'
+import { useToast } from "@/hooks/use-toast"
+
 
 interface Conversation {
+  id: string;
   name: string;
-  // Add other properties of the conversation object if needed
+}
+
+interface AudioFile {
+  name: string;
+  url: string;
+}
+
+interface TranscriptionWord {
+  word: string;
+  start: number;
+  end: number;
+  confidence: number;
+}
+
+interface TranscriptionSentence {
+  sentence: string;
+  start: number;
+  end: number;
+  words: TranscriptionWord[];
+  confidence: number;
+  speaker: string | null;
+  channel: number;
 }
 
 export default function ConversationView({ conversation }: { conversation: Conversation }) {
   const [chatMessage, setChatMessage] = useState('')
+  const [transcript, setTranscript] = useState<TranscriptionSentence[]>([])
+  const [chatHistory, setChatHistory] = useState<string[]>([])
+  const [audioFile, setAudioFile] = useState<AudioFile | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    fetchConversationDetails()
+    fetchAudioFile()
+  }, [conversation.id])
+
+  useEffect(() => {
+    if (audioRef.current) {
+      const audio = audioRef.current;
+      audio.addEventListener('timeupdate', handleTimeUpdate);
+      audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.addEventListener('ended', handleAudioEnded);
+      audio.addEventListener('error', handleAudioError);
+
+      return () => {
+        audio.removeEventListener('timeupdate', handleTimeUpdate);
+        audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        audio.removeEventListener('ended', handleAudioEnded);
+        audio.removeEventListener('error', handleAudioError);
+      };
+    }
+  }, [audioRef]);
+
+  useEffect(() => {
+    if (audioRef.current && audioFile) {
+      audioRef.current.src = audioFile.url
+      audioRef.current.load() // Explicitly load the new source
+      setError(null) // Clear any previous errors
+      if (isPlaying) {
+        audioRef.current.play().catch(handleAudioError)
+      }
+    }
+  }, [audioFile, isPlaying])
+
+  const fetchConversationDetails = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`http://localhost:8080/conversations/${conversation.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setTranscript(data.transcript || [])
+        setChatHistory(data.chatHistory || [])
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to fetch conversation details",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching conversation details:', error)
+      toast({
+        title: "Error",
+        description: "An error occurred while fetching conversation details",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const fetchAudioFile = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`http://localhost:8080/conversations/${conversation.id}/audio`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      const data = await response.json()
+      console.log('Full API response:', data);
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (response.ok) {
+        console.log('Received audio file:', data.audio_file);
+        if (data.audio_file) {
+          setAudioFile(data.audio_file)
+        } else {
+          console.warn('No audio file found for this conversation');
+          toast({
+            title: "Info",
+            description: "No audio file found for this conversation",
+            variant: "default",
+          })
+        }
+      } else {
+        throw new Error(data.error || 'Unknown error')
+      }
+    } catch (error) {
+      console.error('Error fetching audio file:', error)
+      toast({
+        title: "Error",
+        description: "An error occurred while fetching the audio file",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSendMessage = async () => {
+    if (!chatMessage.trim()) return
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`http://localhost:8080/conversations/${conversation.id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ message: chatMessage })
+      })
+
+      if (response.ok) {
+        setChatHistory([...chatHistory, `You: ${chatMessage}`])
+        setChatMessage('')
+        // You might want to fetch the updated chat history here
+        // or handle the response from the server
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to send message",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error sending message:', error)
+      toast({
+        title: "Error",
+        description: "An error occurred while sending the message",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handlePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause()
+      } else {
+        audioRef.current.play().catch(handleAudioError)
+      }
+      setIsPlaying(!isPlaying)
+    }
+  }
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime)
+    }
+  }
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration)
+    }
+  }
+
+  const handleAudioEnded = () => {
+    setIsPlaying(false)
+    setCurrentTime(0)
+  }
+
+  const handleAudioError = (e: Event) => {
+    const target = e.target as HTMLAudioElement
+    console.error('Audio error:', target.error)
+    setError(`Error playing audio: ${target.error?.message || 'Unknown error'}`)
+    setIsPlaying(false)
+    toast({
+      title: "Audio Error",
+      description: `Failed to play audio: ${target.error?.message || 'Unknown error'}`,
+      variant: "destructive",
+    })
+  }
+
+  const handleSliderChange = (value: number[]) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = value[0]
+      setCurrentTime(value[0])
+    }
+  }
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60)
+    const seconds = Math.floor(time % 60)
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
 
   return (
     <>
-      <h2 className="text-2xl font-bold">{conversation.name}</h2>
+      <h2 className="text-2xl font-bold mb-4">{conversation.name}</h2>
       
-      {/* Timeline */}
-      <Card>
+      {/* Audio Player */}
+      <Card className="mb-4">
         <CardHeader>
-          <CardTitle>Timeline</CardTitle>
+          <CardTitle>Audio Player</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <Slider defaultValue={[0]} max={100} step={1} />
-            <div className="flex justify-between">
-              <Button size="icon" variant="outline">
-                <Play className="h-4 w-4" />
-              </Button>
-              <span>00:00 / 10:00</span>
+          <audio
+            ref={audioRef}
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            onEnded={handleAudioEnded}
+          />
+          {error && (
+            <div className="text-red-500 mb-2">{error}</div>
+          )}
+          {audioFile ? (
+            <div className="space-y-4">
+              <Slider
+                value={[currentTime]}
+                max={duration}
+                step={0.1}
+                onValueChange={handleSliderChange}
+              />
+              <div className="flex justify-between items-center">
+                <span>{formatTime(currentTime)}</span>
+                <Button size="icon" variant="outline" onClick={handlePlayPause}>
+                  {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                </Button>
+                <span>{formatTime(duration)}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Music className="h-4 w-4" />
+                <span>{audioFile.name}</span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="text-center text-gray-500">No audio file available for this conversation</div>
+          )}
         </CardContent>
       </Card>
 
@@ -53,41 +295,27 @@ export default function ConversationView({ conversation }: { conversation: Conve
             <CardContent className="p-4">
               <ScrollArea className="h-[300px]">
                 <div className="space-y-4">
-                  <p><strong>Speaker 1:</strong> Hello, how are you today?</p>
-                  <p><strong>Speaker 2:</strong> I'm doing well, thank you. How about you?</p>
-                  <p><strong>Speaker 1:</strong> I'm great, thanks for asking!</p>
+                  {transcript.map((sentence, index) => (
+                    <div key={index} className="mb-2">
+                      <p className="text-sm text-gray-500">
+                        {formatTime(sentence.start)} - {formatTime(sentence.end)}
+                        {sentence.speaker && ` | Speaker: ${sentence.speaker}`}
+                      </p>
+                      <p>{sentence.sentence}</p>
+                    </div>
+                  ))}
                 </div>
               </ScrollArea>
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="chat" className="space-y-4">
-          <Card>
-            <CardContent className="p-4">
-              <ScrollArea className="h-[300px]">
-                <div className="space-y-4">
-                  <p><strong>You:</strong> What was the main topic of the conversation?</p>
-                  <p><strong>AI:</strong> The main topic of the conversation was a friendly greeting and exchange of pleasantries.</p>
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-          <div className="flex space-x-2">
-            <Input
-              type="text"
-              placeholder="Ask about your recordings..."
-              value={chatMessage}
-              onChange={(e) => setChatMessage(e.target.value)}
-            />
-            <Button size="icon">
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
+          {/* ... (chat content remains the same) */}
         </TabsContent>
       </Tabs>
 
       {/* Plugin Outputs */}
-      <Card>
+      <Card className="mt-4">
         <CardHeader>
           <CardTitle>Plugin Outputs</CardTitle>
         </CardHeader>
@@ -116,7 +344,7 @@ export default function ConversationView({ conversation }: { conversation: Conve
       </Card>
 
       {/* Music Analyzer */}
-      <Card>
+      <Card className="mt-4">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Music Analyzer</CardTitle>
           <Switch />

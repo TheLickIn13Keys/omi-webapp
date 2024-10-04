@@ -1,13 +1,7 @@
-"use client"
-
-
-import { useState } from 'react'
-
-// Define the Conversation type
-type Conversation = {
-  id: string;
-  name: string;
-};
+"use client";
+import React, { useState, useEffect } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
+import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -17,23 +11,107 @@ import ActionItemsSummary from './globalActionItems'
 import ConversationView from './conversationView'
 import SettingsModal from './settingsModal'
 import PluginsMarketplace from './plugins'
-import { Cog, Search } from 'lucide-react'
-import React from 'react';
+import { Cog, Search, RefreshCw } from 'lucide-react'
+import { useToast } from "@/hooks/use-toast"
+
+type Conversation = {
+  id: string;
+  name: string;
+};
 
 export default function Dashboard() {
   const [globalSearch, setGlobalSearch] = useState('')
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(true)
+  const [conversations, setConversations] = useState<Conversation[] | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [showPluginsMarketplace, setShowPluginsMarketplace] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const conversations = [
-    { id: "1", name: "Morning Coffee Chat" },
-    { id: "2", name: "Team Meeting Notes" },
-    { id: "3", name: "Client Presentation Prep" },
-  ]
+  const { isAuthenticated } = useAuth()
+  const router = useRouter()
+  const { toast } = useToast()
 
-  const handleLogout = () => {
-    setIsAuthenticated(false)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login')
+    } else {
+      fetchConversations()
+    }
+  }, [isAuthenticated, router])
+
+  const fetchConversations = async () => {
+    setIsLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('http://localhost:8080/conversations', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setConversations(data)
+      } else {
+        console.error('Failed to fetch conversations')
+        toast({
+          title: "Error",
+          description: "Failed to fetch conversations",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching conversations:', error)
+      toast({
+        title: "Error",
+        description: "An error occurred while fetching conversations",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const refreshConversations = async () => {
+    setIsRefreshing(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('http://localhost:8080/query-bucket', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.new_conversations && data.new_conversations.length > 0) {
+          toast({
+            title: "Success",
+            description: `Found ${data.new_conversations.length} new conversation(s)`,
+          })
+          await fetchConversations() // Refresh the conversation list
+        } else {
+          toast({
+            title: "Info",
+            description: "No new conversations found",
+          })
+        }
+      } else {
+        console.error('Failed to query bucket')
+        toast({
+          title: "Error",
+          description: "Failed to query bucket",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error querying bucket:', error)
+      toast({
+        title: "Error",
+        description: "An error occurred while querying the bucket",
+        variant: "destructive",
+      })
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   const togglePluginsMarketplace = () => {
@@ -41,7 +119,7 @@ export default function Dashboard() {
   }
 
   if (!isAuthenticated) {
-    return null
+    return null // or a loading spinner
   }
 
   return (
@@ -49,7 +127,6 @@ export default function Dashboard() {
       <Sidebar
         conversations={conversations}
         onConversationSelect={setSelectedConversation}
-        onLogout={handleLogout}
         onPluginsClick={togglePluginsMarketplace}
       />
       <div className="flex-1 p-6 space-y-6 overflow-auto">
@@ -68,15 +145,22 @@ export default function Dashboard() {
               <Button size="icon">
                 <Search className="h-4 w-4" />
               </Button>
+              <Button size="icon" onClick={refreshConversations} disabled={isRefreshing}>
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
 
             <ActionItemsSummary />
 
-            {selectedConversation ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+                <p className="text-xl text-gray-500">Loading conversations...</p>
+              </div>
+            ) : selectedConversation ? (
               <ConversationView conversation={selectedConversation} />
             ) : (
               <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-                <p className="text-xl text-gray-500">Click a conversation to get started</p>
+                <p className="text-xl text-gray-500">Select a conversation or start a new one</p>
               </div>
             )}
           </>
