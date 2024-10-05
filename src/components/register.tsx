@@ -32,7 +32,7 @@ export default function Register() {
     }
 
     try {
-      const response = await fetch(process.env.BASE_URL + '/register', {
+      const response = await fetch("https://aggieworks-backend.bardia.app" + '/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

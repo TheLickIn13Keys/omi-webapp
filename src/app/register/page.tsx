@@ -1,23 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
-import Dashboard from '@/components/dashboard';
+import Register from '@/components/register'
 
-export default function Home() {
-  const { isAuthenticated } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, router]);
-
-  if (!isAuthenticated) {
-    return null; 
-  }
-
-  return <Dashboard />;
+export default function RegisterPage() {
+  return <Register />
 }
