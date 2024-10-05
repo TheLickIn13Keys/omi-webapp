@@ -88,7 +88,7 @@ export default function ConversationView({ conversation }: { conversation: Conve
   const fetchConversationDetails = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`https://aggieworks-backend.server.bardia.app/conversations/${conversation.id}`, {
+      const response = await fetch(process.env.BASE_URL + `/conversations/${conversation.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -119,7 +119,7 @@ export default function ConversationView({ conversation }: { conversation: Conve
   const fetchAudioFile = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`https://aggieworks-backend.server.bardia.app/conversations/${conversation.id}/audio`, {
+      const response = await fetch(process.env.BASE_URL + `/conversations/${conversation.id}/audio`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -159,7 +159,7 @@ export default function ConversationView({ conversation }: { conversation: Conve
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`https://aggieworks-backend.server.bardia.app/conversations/${conversation.id}/messages`, {
+      const response = await fetch(process.env.BASE_URL + `/conversations/${conversation.id}/messages`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

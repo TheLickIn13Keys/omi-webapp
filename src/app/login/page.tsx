@@ -21,7 +21,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     try {
-      const response = await fetch('https://aggieworks-backend.server.bardia.app/login', {
+      const response = await fetch(process.env.BASE_URL + '/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

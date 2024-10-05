@@ -70,7 +70,7 @@ export default function Sidebar({ conversations, onConversationSelect, onPlugins
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('https://aggieworks-backend.server.bardia.app/upload-audio', {
+      const response = await fetch(process.env.BASE_URL + '/upload-audio', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
