@@ -33,7 +33,7 @@ Key features include:
 ## 🚧 Work in Progress
 
 - 🥴 Still a few bugs in the Quick Info section (I'll fix them soon I promise)
-- 👥 User-specific conversation separation
+- 👥 User-specific conversation separation (This means that currently, every user has access to the same conversations. Obviously, this needs to change, but I had already gone over 5 hours, so I will implement this ASAP)
 - 🤖 AI chat functionality
 - 🎯 Improved transcription accuracy
 - 👂 Enhanced speaker detection
