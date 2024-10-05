@@ -7,7 +7,7 @@
 
 ## 🚀 Project Description
 
-Omi Friend is a companion application designed to work with the Omi device, a continuous audio recorder. The Omi device records everything it hears and sends the audio to your phone. Our application aims to improve upon the existing Omi app by providing more accurate transcriptions, better speaker detection, and advanced analysis through various plugins.
+Omi Friend is a companion application designed to work with the Omi device, a continuous audio recorder. The Omi device records everything it hears and sends the audio to your phone. This application aims to improve upon the existing Omi app by providing more accurate transcriptions, better speaker detection, and advanced analysis through various plugins.
 
 Key features include:
 - Improved transcription using Gladia's Wisper-Zero model
@@ -54,7 +54,7 @@ To run this project locally, follow these steps:
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/omi-friend.git
+   git clone https://github.com/TheLickIn13Keys/omi-friend.git
    cd omi-friend
    ```
 
