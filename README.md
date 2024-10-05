@@ -46,7 +46,7 @@ Key features include:
 - **Database**: MongoDB
 - **Cloud Storage**: Google Cloud Platform (GCP)
 - **Authentication**: JWT
-- **APIs**: Gladia (for basic transcription, to be replaced with Whisper)
+- **APIs**: Gladia
 
 ## 🏃‍♂️ Running the Project
 
