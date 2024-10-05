@@ -11,7 +11,7 @@
 
 Omi Friend is a companion application designed to work with the Omi device, a continuous audio recorder. The Omi device records everything it hears and sends the audio to your phone. This application aims to improve upon the existing Omi app by providing more accurate transcriptions, better speaker detection, and advanced analysis through various plugins.
 
-The Omi App will automatically output the raw audio files to a GCP bucket where it will get picked up by the webapp after clicking the refresh button in the top right. There is also an option to upload your own auio files through the UI, but that feature is still a little buggy :(.
+The Omi App will automatically output the raw audio files to a GCP bucket (same credentials used in the Omi App under developer mode), where it will get picked up by the webapp after clicking the refresh button in the top right. There is also an option to upload your own auio files through the UI, but that feature is still a little buggy :(.
 
 Key features include:
 - Improved transcription using Gladia's Wisper-Zero model
