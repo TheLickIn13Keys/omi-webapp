@@ -41,7 +41,7 @@ Key features include:
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: Next.js, React, Tailwind CSS
+- **Frontend**: Next.js, React, ShadCN, Tailwind CSS
 - **Backend**: Go
 - **Database**: MongoDB
 - **Cloud Storage**: Google Cloud Platform (GCP)
