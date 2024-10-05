@@ -1,5 +1,7 @@
 "use client"
 
+//TODO: Implement
+
 import { useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +16,7 @@ interface PluginsMarketplaceProps {
 export default function PluginsMarketplace({ onClose }: PluginsMarketplaceProps) {
   const [searchQuery, setSearchQuery] = useState('')
 
+  //placeholder
   const plugins = [
     { id: 1, name: 'Sentiment Analyzer', description: 'Analyze the sentiment of your conversations', installed: true },
     { id: 2, name: 'Bias Detector', description: 'Detect potential biases in speech', installed: true },

@@ -16,7 +16,7 @@ export default function Home() {
   }, [isAuthenticated, router]);
 
   if (!isAuthenticated) {
-    return null; // or a loading spinner
+    return null; 
   }
 
   return <Dashboard />;

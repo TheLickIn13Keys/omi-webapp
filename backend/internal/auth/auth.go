@@ -26,7 +26,6 @@ func RegisterUser(collection *mongo.Collection) http.HandlerFunc {
 		var user models.User
 		_ = json.NewDecoder(r.Body).Decode(&user)
 
-		// Check if user already exists
 		var existingUser models.User
 		err := collection.FindOne(context.TODO(), bson.M{"email": user.Email}).Decode(&existingUser)
 		if err == nil {
@@ -35,7 +34,6 @@ func RegisterUser(collection *mongo.Collection) http.HandlerFunc {
 			return
 		}
 
-		// Hash the password
 		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 		user.Password = string(hashedPassword)
 
@@ -48,7 +46,6 @@ func RegisterUser(collection *mongo.Collection) http.HandlerFunc {
 
 		user.ID = result.InsertedID.(primitive.ObjectID)
 
-		// Generate token
 		token, err := generateToken(user.ID.Hex())
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -56,7 +53,6 @@ func RegisterUser(collection *mongo.Collection) http.HandlerFunc {
 			return
 		}
 
-		// Return user info and token
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"id":    user.ID,
@@ -124,8 +120,6 @@ func LoginUser(collection *mongo.Collection) http.HandlerFunc {
 }
 
 func LogoutUser(w http.ResponseWriter, r *http.Request) {
-	// In a stateless JWT system, we don't need to do anything server-side
-	// The client will remove the token
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
 }

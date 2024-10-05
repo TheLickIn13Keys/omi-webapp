@@ -33,6 +33,8 @@ type Conversation struct {
 	AudioFile   *AudioFile              `json:"audio_file" bson:"audio_file"`
 	Transcript  []TranscriptionSentence `json:"transcript" bson:"transcript"`
 	ChatHistory []ChatMessage           `json:"chat_history" bson:"chat_history"`
+	Summary     string                  `json:"summary" bson:"summary"`
+	ActionItems []string                `json:"action_items" bson:"action_items"`
 	CreatedAt   time.Time               `json:"created_at" bson:"created_at"`
 	UpdatedAt   time.Time               `json:"updated_at" bson:"updated_at"`
 }
@@ -53,8 +55,6 @@ type GCPCredentials struct {
 	UserID      primitive.ObjectID `bson:"user_id"`
 	Credentials string             `bson:"credentials"`
 	BucketName  string             `bson:"bucket_name"`
-	ClientEmail string             `bson:"client_email"`
-	PrivateKey  string             `bson:"private_key"`
 	GladiaKey   string             `bson:"gladia_key"`
 }
 

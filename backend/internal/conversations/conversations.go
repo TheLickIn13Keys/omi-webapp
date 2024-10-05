@@ -13,6 +13,7 @@ import (
 
 	"github.com/TheLickIn13Keys/omi-webapp/internal/auth"
 	"github.com/TheLickIn13Keys/omi-webapp/internal/models"
+	"github.com/TheLickIn13Keys/omi-webapp/internal/transcription"
 )
 
 func GetConversations(collection *mongo.Collection) http.HandlerFunc {
@@ -106,6 +107,33 @@ func AddMessage(collection *mongo.Collection) http.HandlerFunc {
 			"$push": bson.M{"chat_history": message},
 			"$set":  bson.M{"updated_at": time.Now()},
 		}
+
+		var conversation models.Conversation
+		err = collection.FindOne(context.TODO(), bson.M{"_id": conversationID, "user_id": userID}).Decode(&conversation)
+		if err == nil && len(conversation.ChatHistory) == 0 && conversation.AudioFile != nil {
+
+			var gcpCreds models.GCPCredentials
+			gcpCollection := collection.Database().Collection("gcp_credentials")
+			err = gcpCollection.FindOne(context.TODO(), bson.M{"user_id": userID}).Decode(&gcpCreds)
+			if err == nil {
+				go func() {
+					transcript, summary, actionItems, err := transcription.TranscribeAudio(conversation.AudioFile.URL, gcpCreds.GladiaKey)
+					if err == nil {
+						_, _ = collection.UpdateOne(
+							context.TODO(),
+							bson.M{"_id": conversationID},
+							bson.M{
+								"$set": bson.M{
+									"transcript":   transcript,
+									"summary":      summary,
+									"action_items": actionItems,
+								},
+							},
+						)
+					}
+				}()
+			}
+		}
 		_, err = collection.UpdateOne(context.TODO(), bson.M{"_id": conversationID, "user_id": userID}, update)
 		if err != nil {
 			http.Error(w, "Error adding message", http.StatusInternalServerError)
@@ -114,6 +142,51 @@ func AddMessage(collection *mongo.Collection) http.HandlerFunc {
 
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(message)
+	}
+}
+
+func GlobalSearch(collection *mongo.Collection) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		userID, err := auth.GetUserIDFromRequest(r)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		query := r.URL.Query().Get("q")
+		if query == "" {
+			http.Error(w, "Search query is required", http.StatusBadRequest)
+			return
+		}
+
+		filter := bson.M{
+			"user_id": userID,
+			"$or": []bson.M{
+				{"name": bson.M{"$regex": query, "$options": "i"}},
+				{"transcript.sentence": bson.M{"$regex": query, "$options": "i"}},
+			},
+		}
+
+		cursor, err := collection.Find(context.TODO(), filter)
+		if err != nil {
+			http.Error(w, "Error performing search", http.StatusInternalServerError)
+			return
+		}
+		defer cursor.Close(context.TODO())
+
+		var results []models.Conversation
+		for cursor.Next(context.TODO()) {
+			var conversation models.Conversation
+			if err := cursor.Decode(&conversation); err != nil {
+				http.Error(w, "Error decoding search results", http.StatusInternalServerError)
+				return
+			}
+			results = append(results, conversation)
+		}
+
+		json.NewEncoder(w).Encode(results)
 	}
 }
 

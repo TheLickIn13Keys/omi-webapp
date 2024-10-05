@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -68,7 +70,6 @@ func GetConversationAudio(gcpCollection, conversationsCollection *mongo.Collecti
 			return
 		}
 
-		// Fetch the conversation
 		var conversation models.Conversation
 		err = conversationsCollection.FindOne(context.TODO(), bson.M{"_id": conversationID, "user_id": userID}).Decode(&conversation)
 		if err != nil {
@@ -76,7 +77,6 @@ func GetConversationAudio(gcpCollection, conversationsCollection *mongo.Collecti
 			return
 		}
 
-		// If the conversation doesn't have an audio file, return an empty response
 		if conversation.AudioFile == nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"audio_file": nil,
@@ -84,7 +84,6 @@ func GetConversationAudio(gcpCollection, conversationsCollection *mongo.Collecti
 			return
 		}
 
-		// Fetch GCP credentials for the user
 		var creds models.GCPCredentials
 		err = gcpCollection.FindOne(context.TODO(), bson.M{"user_id": userID}).Decode(&creds)
 		if err != nil {
@@ -93,7 +92,6 @@ func GetConversationAudio(gcpCollection, conversationsCollection *mongo.Collecti
 			return
 		}
 
-		// Decode base64 credentials
 		jsonCreds, err := base64.StdEncoding.DecodeString(creds.Credentials)
 		if err != nil {
 			log.Printf("Error decoding GCP credentials: %v", err)
@@ -101,7 +99,6 @@ func GetConversationAudio(gcpCollection, conversationsCollection *mongo.Collecti
 			return
 		}
 
-		// Parse the JSON credentials
 		var parsedCreds struct {
 			ClientEmail string `json:"client_email"`
 			PrivateKey  string `json:"private_key"`
@@ -112,7 +109,6 @@ func GetConversationAudio(gcpCollection, conversationsCollection *mongo.Collecti
 			return
 		}
 
-		// Generate a signed URL for the audio file
 		url, err := storage.SignedURL(creds.BucketName, conversation.AudioFile.Name, &storage.SignedURLOptions{
 			GoogleAccessID: parsedCreds.ClientEmail,
 			PrivateKey:     []byte(parsedCreds.PrivateKey),
@@ -125,7 +121,6 @@ func GetConversationAudio(gcpCollection, conversationsCollection *mongo.Collecti
 			return
 		}
 
-		// Update the URL in the response
 		conversation.AudioFile.URL = url
 
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -143,7 +138,6 @@ func QueryBucket(gcpCollection, conversationsCollection *mongo.Collection) http.
 			return
 		}
 
-		// Fetch GCP credentials for the user
 		var creds models.GCPCredentials
 		err = gcpCollection.FindOne(context.TODO(), bson.M{"user_id": userID}).Decode(&creds)
 		if err != nil {
@@ -151,14 +145,21 @@ func QueryBucket(gcpCollection, conversationsCollection *mongo.Collection) http.
 			return
 		}
 
-		// Decode base64 credentials
 		jsonCreds, err := base64.StdEncoding.DecodeString(creds.Credentials)
 		if err != nil {
 			http.Error(w, "Invalid GCP credentials", http.StatusInternalServerError)
 			return
 		}
 
-		// Create GCP storage client
+		var parsedCreds struct {
+			ClientEmail string `json:"client_email"`
+			PrivateKey  string `json:"private_key"`
+		}
+		if err := json.Unmarshal(jsonCreds, &parsedCreds); err != nil {
+			http.Error(w, "Invalid GCP credentials format", http.StatusInternalServerError)
+			return
+		}
+
 		ctx := context.Background()
 		client, err := storage.NewClient(ctx, option.WithCredentialsJSON(jsonCreds))
 		if err != nil {
@@ -167,7 +168,6 @@ func QueryBucket(gcpCollection, conversationsCollection *mongo.Collection) http.
 		}
 		defer client.Close()
 
-		// List objects in the bucket
 		bucket := client.Bucket(creds.BucketName)
 		it := bucket.Objects(ctx, nil)
 
@@ -183,17 +183,16 @@ func QueryBucket(gcpCollection, conversationsCollection *mongo.Collection) http.
 				return
 			}
 
-			// Check if a conversation already exists for this file
 			var existingConversation models.Conversation
 			err = conversationsCollection.FindOne(context.TODO(), bson.M{"user_id": userID, "audio_file.name": attrs.Name}).Decode(&existingConversation)
 			if err == mongo.ErrNoDocuments {
-				// Create a new conversation for this file immediately
+
 				newConversation := models.Conversation{
 					UserID: userID,
 					Name:   strings.TrimSuffix(filepath.Base(attrs.Name), filepath.Ext(attrs.Name)),
 					AudioFile: &models.AudioFile{
 						Name: attrs.Name,
-						URL:  "", // We'll generate this URL when needed
+						URL:  "",
 					},
 					Transcript: []models.TranscriptionSentence{{Sentence: "Processing transcription..."}},
 					CreatedAt:  attrs.Created,
@@ -209,32 +208,12 @@ func QueryBucket(gcpCollection, conversationsCollection *mongo.Collection) http.
 				newConversation.ID = result.InsertedID.(primitive.ObjectID)
 				newConversations = append(newConversations, newConversation)
 
-				// Start transcription in a goroutine
-				go func(convID primitive.ObjectID) {
-					// Generate a signed URL for the audio file
-					signedURL, err := generateSignedURL(bucket, attrs.Name, creds)
-					if err != nil {
-						log.Printf("Error generating signed URL: %v", err)
-						return
-					}
+				go initiateTranscription(conversationsCollection, gcpCollection, newConversation.ID, jsonCreds, creds)
+			} else if err == nil {
 
-					// Transcribe the audio
-					transcript, err := transcription.TranscribeAudio(signedURL, creds.GladiaKey)
-					if err != nil {
-						log.Printf("Error transcribing audio: %v", err)
-						transcript = []models.TranscriptionSentence{{Sentence: "Error transcribing audio"}}
-					}
-
-					// Update the conversation with the transcription
-					_, err = conversationsCollection.UpdateOne(
-						context.TODO(),
-						bson.M{"_id": convID},
-						bson.M{"$set": bson.M{"transcript": transcript, "updated_at": time.Now()}},
-					)
-					if err != nil {
-						log.Printf("Error updating conversation with transcription: %v", err)
-					}
-				}(newConversation.ID)
+				if len(existingConversation.Transcript) == 0 || (len(existingConversation.Transcript) == 1 && existingConversation.Transcript[0].Sentence == "Processing transcription...") {
+					go initiateTranscription(conversationsCollection, gcpCollection, existingConversation.ID, jsonCreds, creds)
+				}
 			}
 		}
 
@@ -244,15 +223,125 @@ func QueryBucket(gcpCollection, conversationsCollection *mongo.Collection) http.
 	}
 }
 
-func generateSignedURL(bucket *storage.BucketHandle, objectName string, creds models.GCPCredentials) (string, error) {
-	opts := &storage.SignedURLOptions{
-		Scheme:         storage.SigningSchemeV4,
-		Method:         "GET",
-		Expires:        time.Now().Add(15 * time.Minute),
-		GoogleAccessID: creds.ClientEmail,
-		PrivateKey:     []byte(creds.PrivateKey),
+func initiateTranscription(conversationsCollection, gcpCollection *mongo.Collection, conversationID primitive.ObjectID, jsonCreds []byte, creds models.GCPCredentials) {
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		var conversation models.Conversation
+		err := conversationsCollection.FindOne(context.TODO(), bson.M{"_id": conversationID}).Decode(&conversation)
+		if err != nil {
+			log.Printf("Error fetching conversation: %v", err)
+			return
+		}
+
+		signedURL, err := generateSignedURL(jsonCreds, creds.BucketName, conversation.AudioFile.Name)
+		if err != nil {
+			log.Printf("Error generating signed URL: %v", err)
+			return
+		}
+
+		transcript, summary, actionItems, err := transcription.TranscribeAudio(signedURL, creds.GladiaKey)
+		if err != nil {
+			log.Printf("Error transcribing audio (attempt %d): %v", i+1, err)
+			if i == maxRetries-1 {
+				transcript = []models.TranscriptionSentence{{Sentence: "Error transcribing audio after multiple attempts"}}
+				summary = "Error generating summary"
+				actionItems = []string{"Error generating action items"}
+			} else {
+				time.Sleep(time.Duration(i+1) * 5 * time.Second)
+				continue
+			}
+		}
+
+		_, err = conversationsCollection.UpdateOne(
+			context.TODO(),
+			bson.M{"_id": conversationID},
+			bson.M{"$set": bson.M{
+				"transcript":   transcript,
+				"summary":      summary,
+				"action_items": actionItems,
+				"updated_at":   time.Now(),
+			}},
+		)
+		if err != nil {
+			log.Printf("Error updating conversation with transcription: %v", err)
+		}
+
+		if err == nil {
+			break
+		}
 	}
-	return bucket.SignedURL(objectName, opts)
+}
+
+func UploadAudio(gcpCredentialsCollection *mongo.Collection, userID primitive.ObjectID, localFilePath, filename string) (string, error) {
+
+	var gcpCreds models.GCPCredentials
+	err := gcpCredentialsCollection.FindOne(context.TODO(), bson.M{"user_id": userID}).Decode(&gcpCreds)
+	if err != nil {
+		return "", fmt.Errorf("error fetching GCP credentials: %v", err)
+	}
+
+	jsonCreds, err := base64.StdEncoding.DecodeString(gcpCreds.Credentials)
+	if err != nil {
+		return "", fmt.Errorf("error decoding GCP credentials: %v", err)
+	}
+
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx, option.WithCredentialsJSON(jsonCreds))
+	if err != nil {
+		return "", fmt.Errorf("failed to create GCP storage client: %v", err)
+	}
+	defer client.Close()
+
+	f, err := os.Open(localFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %v", err)
+	}
+	defer f.Close()
+
+	contentType := mime.TypeByExtension(filepath.Ext(filename))
+	if contentType == "" {
+		contentType = "audio/mpeg"
+	}
+
+	bucket := client.Bucket(gcpCreds.BucketName)
+	obj := bucket.Object(filename)
+	wc := obj.NewWriter(ctx)
+	wc.ContentType = contentType
+	if _, err = io.Copy(wc, f); err != nil {
+		return "", fmt.Errorf("failed to copy file to GCP: %v", err)
+	}
+	if err := wc.Close(); err != nil {
+		return "", fmt.Errorf("failed to close GCP writer: %v", err)
+	}
+
+	url, err := generateSignedURL(jsonCreds, gcpCreds.BucketName, filename)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate signed URL: %v", err)
+	}
+
+	return url, nil
+}
+
+func generateSignedURL(jsonCreds []byte, bucketName, objectName string) (string, error) {
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx, option.WithCredentialsJSON(jsonCreds))
+	if err != nil {
+		return "", fmt.Errorf("failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	opts := &storage.SignedURLOptions{
+		Scheme:  storage.SigningSchemeV4,
+		Method:  "GET",
+		Expires: time.Now().Add(15 * time.Minute),
+	}
+
+	url, err := client.Bucket(bucketName).SignedURL(objectName, opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate signed URL: %v", err)
+	}
+
+	return url, nil
 }
 
 func ServeAudioFile(gcpCollection *mongo.Collection) http.HandlerFunc {
@@ -267,7 +356,6 @@ func ServeAudioFile(gcpCollection *mongo.Collection) http.HandlerFunc {
 			return
 		}
 
-		// Fetch GCP credentials for the user
 		var creds models.GCPCredentials
 		err = gcpCollection.FindOne(context.TODO(), bson.M{"user_id": userID}).Decode(&creds)
 		if err != nil {
@@ -275,14 +363,12 @@ func ServeAudioFile(gcpCollection *mongo.Collection) http.HandlerFunc {
 			return
 		}
 
-		// Decode base64 credentials
 		jsonCreds, err := base64.StdEncoding.DecodeString(creds.Credentials)
 		if err != nil {
 			http.Error(w, "Invalid GCP credentials", http.StatusInternalServerError)
 			return
 		}
 
-		// Create GCP storage client
 		ctx := context.Background()
 		client, err := storage.NewClient(ctx, option.WithCredentialsJSON(jsonCreds))
 		if err != nil {
@@ -291,7 +377,6 @@ func ServeAudioFile(gcpCollection *mongo.Collection) http.HandlerFunc {
 		}
 		defer client.Close()
 
-		// Get the object from the bucket
 		bucket := client.Bucket(creds.BucketName)
 		obj := bucket.Object(fmt.Sprintf("%s/%s", conversationID, fileName))
 		reader, err := obj.NewReader(ctx)
@@ -301,11 +386,9 @@ func ServeAudioFile(gcpCollection *mongo.Collection) http.HandlerFunc {
 		}
 		defer reader.Close()
 
-		// Set appropriate headers
-		w.Header().Set("Content-Type", "audio/mpeg") // Adjust content type as needed
+		w.Header().Set("Content-Type", "audio/mpeg")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 
-		// Stream the file to the response
 		_, err = io.Copy(w, reader)
 		if err != nil {
 			http.Error(w, "Failed to stream audio file", http.StatusInternalServerError)

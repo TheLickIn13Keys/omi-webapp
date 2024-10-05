@@ -16,7 +16,7 @@ export default function Home() {
   }, []);
 
   if (!isClient) {
-    return null; // or a loading spinner
+    return null; 
   }
 
   return (

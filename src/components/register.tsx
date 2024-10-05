@@ -43,8 +43,8 @@ export default function Register() {
       const data = await response.json()
 
       if (response.ok) {
-        login(data.token) // Assuming the server returns a token upon successful registration
-        router.push('/') // Redirect to the main page or dashboard
+        login(data.token) 
+        router.push('/')
       } else {
         setError(data.error || 'Registration failed')
       }

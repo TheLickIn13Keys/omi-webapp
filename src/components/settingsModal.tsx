@@ -8,11 +8,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 
 export default function SettingsModal() {
-  const [gcpCredentials, setGcpCredentials] = useState('')
+  const [gcpCredentialsFile, setGcpCredentialsFile] = useState<File | null>(null)
   const [gcpBucketName, setGcpBucketName] = useState('')
   const [gladiaKey, setGladiaKey] = useState('')
   const [voiceRecording, setVoiceRecording] = useState<File | null>(null)
   const { toast } = useToast()
+
+  const handleGcpCredentialsFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      setGcpCredentialsFile(file)
+    }
+  }
 
   const handleVoiceRecordingUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -22,7 +29,19 @@ export default function SettingsModal() {
   }
 
   const saveGCPCredentials = async () => {
+    if (!gcpCredentialsFile) {
+      toast({
+        title: "Error",
+        description: "Please upload a GCP credentials file",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
+      const fileContent = await gcpCredentialsFile.text()
+      const base64Credentials = btoa(fileContent)
+
       const response = await fetch('http://localhost:8080/gcp-credentials', {
         method: 'POST',
         headers: {
@@ -30,7 +49,7 @@ export default function SettingsModal() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
-          credentials: gcpCredentials,
+          credentials: base64Credentials,
           bucket_name: gcpBucketName,
           gladia_key: gladiaKey
         })
@@ -61,12 +80,12 @@ export default function SettingsModal() {
       </TabsList>
       <TabsContent value="bucket-info" className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="gcp-credentials">GCP Credentials (Base64)</Label>
+          <Label htmlFor="gcp-credentials">GCP Credentials File</Label>
           <Input
             id="gcp-credentials"
-            value={gcpCredentials}
-            onChange={(e) => setGcpCredentials(e.target.value)}
-            placeholder="Enter your GCP credentials"
+            type="file"
+            onChange={handleGcpCredentialsFileUpload}
+            accept=".json"
           />
         </div>
         <div className="space-y-2">
@@ -87,6 +106,7 @@ export default function SettingsModal() {
             placeholder="Enter your Gladia API key"
           />
         </div>
+        //TODO: give feedback when clicked
         <Button className="w-full" onClick={saveGCPCredentials}>Save Bucket Info</Button>
       </TabsContent>
       <TabsContent value="voice-recording" className="space-y-4">

@@ -47,6 +47,8 @@ export default function ConversationView({ conversation }: { conversation: Conve
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [summary, setSummary] = useState<string>('')
+  const [actionItems, setActionItems] = useState<string[]>([])
   const audioRef = useRef<HTMLAudioElement>(null)
   const { toast } = useToast()
 
@@ -75,8 +77,8 @@ export default function ConversationView({ conversation }: { conversation: Conve
   useEffect(() => {
     if (audioRef.current && audioFile) {
       audioRef.current.src = audioFile.url
-      audioRef.current.load() // Explicitly load the new source
-      setError(null) // Clear any previous errors
+      audioRef.current.load() 
+      setError(null) 
       if (isPlaying) {
         audioRef.current.play().catch(handleAudioError)
       }
@@ -95,6 +97,8 @@ export default function ConversationView({ conversation }: { conversation: Conve
         const data = await response.json()
         setTranscript(data.transcript || [])
         setChatHistory(data.chatHistory || [])
+        setSummary(data.summary || '')
+        setActionItems(data.action_items || [])
       } else {
         toast({
           title: "Error",
@@ -167,8 +171,8 @@ export default function ConversationView({ conversation }: { conversation: Conve
       if (response.ok) {
         setChatHistory([...chatHistory, `You: ${chatMessage}`])
         setChatMessage('')
-        // You might want to fetch the updated chat history here
-        // or handle the response from the server
+        
+        
       } else {
         toast({
           title: "Error",
@@ -239,10 +243,42 @@ export default function ConversationView({ conversation }: { conversation: Conve
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
+
   return (
     <>
       <h2 className="text-2xl font-bold mb-4">{conversation.name}</h2>
-      
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>Quick Info</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="summary">
+            <TabsList>
+              <TabsTrigger value="summary">Summary</TabsTrigger>
+              <TabsTrigger value="action-items">Action Items</TabsTrigger>
+            </TabsList>
+            <TabsContent value="summary">
+              <ScrollArea className="h-[200px]">
+                <p>{summary || "No summary available"}</p>
+              </ScrollArea>
+            </TabsContent>
+            <TabsContent value="action-items">
+              <ScrollArea className="h-[200px]">
+                {actionItems.length > 0 ? (
+                  <ul className="list-disc pl-5">
+                    {actionItems.map((item, index) => (
+                      <li key={index}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No action items available</p>
+                )}
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
       {/* Audio Player */}
       <Card className="mb-4">
         <CardHeader>
@@ -310,7 +346,27 @@ export default function ConversationView({ conversation }: { conversation: Conve
           </Card>
         </TabsContent>
         <TabsContent value="chat" className="space-y-4">
-          {/* ... (chat content remains the same) */}
+          <Card>
+            <CardContent className="p-4">
+              <ScrollArea className="h-[300px]">
+                <div className="space-y-4">
+                  <p><strong>You:</strong> What was the main topic of the conversation?</p>
+                  <p><strong>AI:</strong> The main topic of the conversation was a friendly greeting and exchange of pleasantries.</p>
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+          <div className="flex space-x-2">
+            <Input
+              type="text"
+              placeholder="Ask about your recordings..."
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+            />
+            <Button size="icon">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </TabsContent>
       </Tabs>
 
