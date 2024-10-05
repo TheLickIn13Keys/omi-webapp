@@ -70,7 +70,7 @@ func main() {
 	handler := c.Handler(router)
 
 	log.Println("Server is starting on port 8080...")
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	log.Fatal(http.ListenAndServe("0.0.0.0:8080", handler))
 }
 
 func handleAudioUpload(gcpCredentialsCollection, conversationsCollection *mongo.Collection) http.HandlerFunc {
