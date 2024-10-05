@@ -5,6 +5,8 @@
 
 > Enhancing the Omi experience with advanced AI-powered audio analysis
 
+- The hosted version for the take-home can be found here: https://aggie.server.bardia.app
+
 ## 🚀 Project Description
 
 Omi Friend is a companion application designed to work with the Omi device, a continuous audio recorder. The Omi device records everything it hears and sends the audio to your phone. This application aims to improve upon the existing Omi app by providing more accurate transcriptions, better speaker detection, and advanced analysis through various plugins.
