@@ -42,7 +42,7 @@ export default function SettingsModal() {
       const fileContent = await gcpCredentialsFile.text()
       const base64Credentials = btoa(fileContent)
 
-      const response = await fetch('http://localhost:8080/gcp-credentials', {
+      const response = await fetch('https://aggieworks-backend.server.bardia.app/gcp-credentials', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

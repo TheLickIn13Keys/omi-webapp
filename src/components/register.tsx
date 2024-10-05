@@ -32,7 +32,7 @@ export default function Register() {
     }
 
     try {
-      const response = await fetch('http://localhost:8080/register', {
+      const response = await fetch('https://aggieworks-backend.server.bardia.app/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -62,7 +62,7 @@ export default function Dashboard() {
     setIsLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('http://localhost:8080/conversations', {
+      const response = await fetch('https://aggieworks-backend.server.bardia.app/conversations', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -94,7 +94,7 @@ export default function Dashboard() {
     setIsRefreshing(true)
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('http://localhost:8080/query-bucket', {
+      const response = await fetch('https://aggieworks-backend.server.bardia.app/query-bucket', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -145,7 +145,7 @@ export default function Dashboard() {
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`http://localhost:8080/search?q=${encodeURIComponent(globalSearch)}`, {
+      const response = await fetch(`https://aggieworks-backend.server.bardia.app/search?q=${encodeURIComponent(globalSearch)}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

@@ -26,7 +26,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
 
   const logout = async () => {
     try {
-      const response = await fetch('http://localhost:8080/logout', {
+      const response = await fetch('https://aggieworks-backend.server.bardia.app/logout', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
